@@ -1,15 +1,17 @@
 import os
+import asyncio
+import threading
+from http.server import HTTPServer, BaseHTTPRequestHandler
 import yt_dlp
 from telegram import Update
 from telegram.ext import ApplicationBuilder, MessageHandler, filters, ContextTypes
 
-BOT_TOKEN = "8395647369:AAE_ZLO7BnwhJthA-aYDTZwrFujYpi7j4uM"  # Poluchi u @BotFather
-MAX_SIZE_MB = 50  # Telegram limit dlya botov — 50 MB
+BOT_TOKEN = os.environ.get("8395647369:AAE_ZLO7BnwhJthA-aYDTZwrFujYpi7j4uM")
+MAX_SIZE_MB = 50
 
 async def download_and_send(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     url = update.message.text.strip()
 
-    # Proverka — ssylka li eto
     if not url.startswith("http"):
         await update.message.reply_text("Otprav mne ssylku na video (TikTok, YouTube, Instagram...)")
         return
@@ -30,7 +32,6 @@ async def download_and_send(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             ydl.download([url])
 
-        # Proverka razmera fayla
         size_mb = os.path.getsize(output_path) / (1024 * 1024)
         if size_mb > MAX_SIZE_MB:
             await msg.edit_text(f"❌ Video slishkom bolshoe ({size_mb:.1f} MB). Maksimum {MAX_SIZE_MB} MB.")
@@ -51,7 +52,25 @@ async def download_and_send(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             os.remove(output_path)
 
 
+class HealthHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b"OK")
+    def log_message(self, format, *args):
+        pass
+
+
+def run_health_server():
+    port = int(os.environ.get("PORT", 8080))
+    server = HTTPServer(("0.0.0.0", port), HealthHandler)
+    server.serve_forever()
+
+
 def main():
+    t = threading.Thread(target=run_health_server, daemon=True)
+    t.start()
+
     app = ApplicationBuilder().token(BOT_TOKEN).build()
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, download_and_send))
     print("Bot zapushchen...")
