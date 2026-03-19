@@ -13,20 +13,20 @@ async def download_and_send(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     url = update.message.text.strip()
 
     if not url.startswith("http"):
-        await update.message.reply_text("Otprav mne ssylku na video (TikTok, YouTube, Instagram...)")
+        await update.message.reply_text("Menga Video Silkasini yuboring (TikTok, YouTube, Instagram...)")
         return
 
-    msg = await update.message.reply_text("⏳ Skachivayu video, podozhi...")
+    msg = await update.message.reply_text("Videoni yuklayabman 📩")
 
     output_path = f"video_{update.message.chat_id}.mp4"
 
     ydl_opts = {
-        "outtmpl": output_path,
-        "format": "bestvideo[ext=mp4][filesize<50M]+bestaudio[ext=m4a]/best[ext=mp4][filesize<50M]/best",
-        "merge_output_format": "mp4",
-        "quiet": True,
-        "no_warnings": True,
-    }
+    "outtmpl": output_path,
+    "format": "bestvideo+bestaudio/best/bestvideo/best",
+    "merge_output_format": "mp4",
+    "quiet": True,
+    "no_warnings": True,
+}
 
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -38,7 +38,7 @@ async def download_and_send(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             os.remove(output_path)
             return
 
-        await msg.edit_text("📤 Otpravlyayu...")
+        await msg.edit_text("📨 Yuborlayman...")
         with open(output_path, "rb") as video_file:
             await update.message.reply_video(video=video_file, supports_streaming=True)
         await msg.delete()
