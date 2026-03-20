@@ -8,7 +8,7 @@ from telegram.ext import (
     filters, ContextTypes, ConversationHandler
 )
 
-BOT_TOKEN = os.environ.get("8395647369:AAGiAX64BeLIRM79LF9QLCWRw-VnRCsk5gE")
+BOT_TOKEN = "8395647369:AAGiAX64BeLIRM79LF9QLCWRw-VnRCsk5gE"
 MAX_SIZE_MB = 50
 
 CHOOSING, WAITING_LINK = range(2)
