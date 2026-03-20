@@ -1,32 +1,91 @@
 import os
-import asyncio
 import threading
 from http.server import HTTPServer, BaseHTTPRequestHandler
 import yt_dlp
-from telegram import Update
-from telegram.ext import ApplicationBuilder, MessageHandler, filters, ContextTypes
+from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove
+from telegram.ext import (
+    ApplicationBuilder, MessageHandler, CommandHandler,
+    filters, ContextTypes, ConversationHandler
+)
 
-BOT_TOKEN = "8395647369:AAGiAX64BeLIRM79LF9QLCWRw-VnRCsk5gE"
+BOT_TOKEN = os.environ.get("8395647369:AAGiAX64BeLIRM79LF9QLCWRw-VnRCsk5gE")
 MAX_SIZE_MB = 50
 
-async def download_and_send(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+CHOOSING, WAITING_LINK = range(2)
+
+PLATFORMS = {
+    "Instagram": "instagram.com",
+    "TikTok": "tiktok.com",
+    "YouTube Shorts": "youtube.com/shorts",
+    "Pinterest": "pinterest.com",
+    "Boshqalar": None,
+}
+
+keyboard = [
+    ["Instagram", "TikTok"],
+    ["YouTube Shorts", "Pinterest"],
+    ["Boshqalar"]
+]
+markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+
+
+async def start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(
+        "Qaysi platformadan video yuklashni xohlaysiz?",
+        reply_markup=markup
+    )
+    return CHOOSING
+
+
+async def platform_chosen(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    choice = update.message.text
+    if choice not in PLATFORMS:
+        await update.message.reply_text("Iltimos, tugmalardan birini tanlang.", reply_markup=markup)
+        return CHOOSING
+
+    ctx.user_data["platform"] = choice
+
+    if choice == "Boshqalar":
+        await update.message.reply_text(
+            "Ixtiyoriy platformadan havolani yuboring:",
+            reply_markup=ReplyKeyboardRemove()
+        )
+    else:
+        await update.message.reply_text(
+            f"{choice} havolasini yuboring:",
+            reply_markup=ReplyKeyboardRemove()
+        )
+    return WAITING_LINK
+
+
+async def receive_link(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     url = update.message.text.strip()
+    platform = ctx.user_data.get("platform", "Boshqalar")
 
     if not url.startswith("http"):
-        await update.message.reply_text("Menga Video Silkasini yuboring (TikTok, YouTube, Instagram...)")
-        return
+        await update.message.reply_text("Iltimos, to'g'ri havola yuboring (http... bilan boshlanishi kerak)")
+        return WAITING_LINK
 
-    msg = await update.message.reply_text("Videoni yuklayabman 📩")
+    # Platformani tekshirish
+    domain = PLATFORMS.get(platform)
+    if domain and domain not in url:
+        await update.message.reply_text(
+            f"⚠️ Bu havola {platform} ga o'xshamaydi. Baribir yuklayman...",
+        )
 
+    msg = await update.message.reply_text("⏳ Video yuklanmoqda, kuting...")
     output_path = f"video_{update.message.chat_id}.mp4"
 
     ydl_opts = {
-    "outtmpl": output_path,
-    "format": "bestvideo+bestaudio/best/bestvideo/best",
-    "merge_output_format": "mp4",
-    "quiet": True,
-    "no_warnings": True,
-}
+        "outtmpl": output_path,
+        "format": "bestvideo[ext=mp4][filesize<50M]+bestaudio[ext=m4a]/bestvideo[filesize<50M]+bestaudio/best[filesize<50M]/best",
+        "merge_output_format": "mp4",
+        "quiet": True,
+        "no_warnings": True,
+        "extractor_args": {
+            "instagram": {"include_dash_manifest": ["0"]},
+        },
+    }
 
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -34,22 +93,26 @@ async def download_and_send(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
         size_mb = os.path.getsize(output_path) / (1024 * 1024)
         if size_mb > MAX_SIZE_MB:
-            await msg.edit_text(f"❌ Video slishkom bolshoe ({size_mb:.1f} MB). Maksimum {MAX_SIZE_MB} MB.")
+            await msg.edit_text(f"❌ Video juda katta ({size_mb:.1f} MB). Maksimum {MAX_SIZE_MB} MB.")
             os.remove(output_path)
-            return
+            await update.message.reply_text("Boshqa video yuborish uchun platformani tanlang:", reply_markup=markup)
+            return CHOOSING
 
-        await msg.edit_text("📨 Yuborlayman...")
+        await msg.edit_text("📤 Yuborilmoqda...")
         with open(output_path, "rb") as video_file:
             await update.message.reply_video(video=video_file, supports_streaming=True)
         await msg.delete()
 
     except yt_dlp.utils.DownloadError as e:
-        await msg.edit_text(f"❌ Ne udalos skachat video.\n{str(e)[:200]}")
+        await msg.edit_text(f"❌ Yuklab bo'lmadi.\n{str(e)[:200]}")
     except Exception as e:
-        await msg.edit_text(f"❌ Oshibka: {str(e)[:200]}")
+        await msg.edit_text(f"❌ Xatolik: {str(e)[:200]}")
     finally:
         if os.path.exists(output_path):
             os.remove(output_path)
+
+    await update.message.reply_text("Yana video yuklash uchun platformani tanlang:", reply_markup=markup)
+    return CHOOSING
 
 
 class HealthHandler(BaseHTTPRequestHandler):
@@ -72,8 +135,18 @@ def main():
     t.start()
 
     app = ApplicationBuilder().token(BOT_TOKEN).build()
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, download_and_send))
-    print("Bot zapushchen...")
+
+    conv_handler = ConversationHandler(
+        entry_points=[CommandHandler("boshlash", start)],
+        states={
+            CHOOSING: [MessageHandler(filters.TEXT & ~filters.COMMAND, platform_chosen)],
+            WAITING_LINK: [MessageHandler(filters.TEXT & ~filters.COMMAND, receive_link)],
+        },
+        fallbacks=[CommandHandler("boshlash", start)],
+    )
+
+    app.add_handler(conv_handler)
+    print("Bot ishga tushdi...")
     app.run_polling()
 
 
