@@ -13,20 +13,21 @@ MAX_SIZE_MB = 50
 
 CHOOSING, WAITING_LINK = range(2)
 
-PLATFORMS = {
-    "Instagram": "instagram.com",
-    "TikTok": "tiktok.com",
-    "YouTube Shorts": "youtube.com/shorts",
-    "Pinterest": "pinterest.com",
-    "Boshqalar": None,
-}
-
 keyboard = [
     ["Instagram", "TikTok"],
     ["YouTube Shorts", "Pinterest"],
-    ["Boshqalar"]
+    ["Facebook", "Boshqalar"]
 ]
 markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+
+PLATFORMS = {
+    "Instagram": "instagram.com",
+    "TikTok": "tiktok.com",
+    "YouTube Shorts": "youtube.com",
+    "Pinterest": "pinterest.com",
+    "Facebook": "facebook.com",
+    "Boshqalar": None,
+}
 
 
 async def start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
@@ -45,17 +46,46 @@ async def platform_chosen(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
     ctx.user_data["platform"] = choice
 
-    if choice == "Boshqalar":
-        await update.message.reply_text(
-            "Ixtiyoriy platformadan havolani yuboring:",
-            reply_markup=ReplyKeyboardRemove()
-        )
-    else:
-        await update.message.reply_text(
-            f"{choice} havolasini yuboring:",
-            reply_markup=ReplyKeyboardRemove()
-        )
+    await update.message.reply_text(
+        f"{choice} havolasini yuboring:",
+        reply_markup=ReplyKeyboardRemove()
+    )
     return WAITING_LINK
+
+
+def get_ydl_opts(output_path, platform):
+    base_opts = {
+        "outtmpl": output_path,
+        "merge_output_format": "mp4",
+        "quiet": True,
+        "no_warnings": True,
+        "http_headers": {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        },
+    }
+
+    if platform == "Pinterest":
+        base_opts["format"] = "bestvideo+bestaudio/best/mp4"
+        base_opts["postprocessors"] = [{
+            "key": "FFmpegVideoConvertor",
+            "preferedformat": "mp4",
+        }]
+    elif platform == "Instagram":
+        base_opts["format"] = "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best"
+        base_opts["extractor_args"] = {
+            "instagram": {"include_dash_manifest": ["0"]}
+        }
+    elif platform == "Facebook":
+        base_opts["format"] = "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best"
+        base_opts["extractor_args"] = {
+            "facebook": {"formats": ["dash_hd", "dash_sd", "progressive_hd", "progressive_sd"]}
+        }
+    elif platform == "YouTube Shorts":
+        base_opts["format"] = "bestvideo[ext=mp4][height<=720]+bestaudio[ext=m4a]/best[ext=mp4][height<=720]/best"
+    else:
+        base_opts["format"] = "bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best[ext=mp4]/best"
+
+    return base_opts
 
 
 async def receive_link(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
@@ -66,28 +96,11 @@ async def receive_link(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("Iltimos, to'g'ri havola yuboring (http... bilan boshlanishi kerak)")
         return WAITING_LINK
 
-    # Platformani tekshirish
-    domain = PLATFORMS.get(platform)
-    if domain and domain not in url:
-        await update.message.reply_text(
-            f"⚠️ Bu havola {platform} ga o'xshamaydi. Baribir yuklayman...",
-        )
-
     msg = await update.message.reply_text("⏳ Video yuklanmoqda, kuting...")
     output_path = f"video_{update.message.chat_id}.mp4"
 
-    ydl_opts = {
-    "outtmpl": output_path,
-    "format": "bestvideo[ext=mp4][filesize<50M]+bestaudio[ext=m4a]/bestvideo[filesize<50M]+bestaudio/best[filesize<50M]/best",
-    "merge_output_format": "mp4",
-    "quiet": True,
-    "no_warnings": True,
-    "extractor_args": {
-        "instagram": {"include_dash_manifest": ["0"]},
-    },
-}
-
     try:
+        ydl_opts = get_ydl_opts(output_path, platform)
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             ydl.download([url])
 
