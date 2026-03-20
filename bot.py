@@ -82,7 +82,7 @@ def get_ydl_opts(output_path, platform):
         }
    elif platform == "YouTube Shorts":
     base_opts["format"] = "bestvideo[ext=mp4][height<=720]+bestaudio[ext=m4a]/best[ext=mp4][height<=720]/best"
-    base_opts["cookiefile"] = "/opt/render/project/src/youtube.com_cookies.txt"
+    base_opts["cookiefile"] = "youtube.com_cookies.txt"
     else:
         base_opts["format"] = "bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best[ext=mp4]/best"
 
