@@ -77,15 +77,15 @@ async def receive_link(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     output_path = f"video_{update.message.chat_id}.mp4"
 
     ydl_opts = {
-        "outtmpl": output_path,
-        "format": "bestvideo[ext=mp4][filesize<50M]+bestaudio[ext=m4a]/bestvideo[filesize<50M]+bestaudio/best[filesize<50M]/best",
-        "merge_output_format": "mp4",
-        "quiet": True,
-        "no_warnings": True,
-        "extractor_args": {
-            "instagram": {"include_dash_manifest": ["0"]},
-        },
-    }
+    "outtmpl": output_path,
+    "format": "bestvideo[ext=mp4][filesize<50M]+bestaudio[ext=m4a]/bestvideo[filesize<50M]+bestaudio/best[filesize<50M]/best",
+    "merge_output_format": "mp4",
+    "quiet": True,
+    "no_warnings": True,
+    "extractor_args": {
+        "instagram": {"include_dash_manifest": ["0"]},
+    },
+}
 
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
