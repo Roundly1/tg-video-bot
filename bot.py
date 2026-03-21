@@ -1,5 +1,4 @@
 import os
-import re
 import threading
 import requests
 from http.server import HTTPServer, BaseHTTPRequestHandler
@@ -11,18 +10,31 @@ MAX_SIZE_MB = 50
 
 
 def get_video_url(youtube_url):
-    ss_url = youtube_url.replace("youtube.com", "ssyoutube.com").replace("youtu.be", "ssyoutube.com")
+    api_url = "https://9xbuddy.app/process"
     headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36"
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "application/json",
+        "Content-Type": "application/json",
+        "Origin": "https://9xbuddy.app",
+        "Referer": "https://9xbuddy.app/",
     }
-    resp = requests.get(ss_url, headers=headers, timeout=15)
-    # Video URL ni sahifadan topamiz
-    matches = re.findall(r'href=["\']([^"\']+\.mp4[^"\']*)["\']', resp.text)
-    if not matches:
-        matches = re.findall(r'"url":"(https://[^"]+\.mp4[^"]*)"', resp.text)
-    if not matches:
-        raise Exception("Video URL topilmadi")
-    return matches[0].replace("\\u0026", "&")
+    resp = requests.get(
+        api_url,
+        params={"url": youtube_url},
+        headers=headers,
+        timeout=30
+    )
+    data = resp.json()
+
+    formats = data.get("formats", [])
+    for fmt in formats:
+        if fmt.get("ext") == "mp4" and fmt.get("url"):
+            return fmt["url"]
+
+    if formats and formats[0].get("url"):
+        return formats[0]["url"]
+
+    raise Exception("Video URL topilmadi")
 
 
 async def start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
