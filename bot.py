@@ -32,14 +32,10 @@ PLATFORMS = {
 
 
 def get_cookies_file():
-    cookies = os.environ.get("YOUTUBE_COOKIES", "")
-    if not cookies:
-        return None
-    tmp = tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False)
-    tmp.write(cookies)
-    tmp.flush()
-    tmp.close()
-    return tmp.name
+    path = "/opt/render/project/src/www.youtube.com_cookies.txt"
+    if os.path.exists(path):
+        return path
+    return None
 
 
 async def start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
