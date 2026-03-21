@@ -1,5 +1,6 @@
 import os
 import threading
+import tempfile
 from http.server import HTTPServer, BaseHTTPRequestHandler
 import yt_dlp
 from telegram import Update
@@ -9,10 +10,19 @@ BOT_TOKEN = "8395647369:AAGiAX64BeLIRM79LF9QLCWRw-VnRCsk5gE"
 MAX_SIZE_MB = 50
 
 
+def get_cookies_file():
+    cookies = os.environ.get("YOUTUBE_COOKIES", "")
+    if not cookies:
+        return None
+    tmp = tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False)
+    tmp.write(cookies)
+    tmp.flush()
+    tmp.close()
+    return tmp.name
+
+
 async def start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        "Salom! YouTube havolasini yuboring, video yuklab beraman."
-    )
+    await update.message.reply_text("Salom! YouTube havolasini yuboring, video yuklab beraman.")
 
 
 async def handle_link(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
@@ -24,6 +34,7 @@ async def handle_link(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
     msg = await update.message.reply_text("⏳ Video yuklanmoqda, kuting...")
     output_path = f"video_{update.message.chat_id}.mp4"
+    cookies_file = get_cookies_file()
 
     ydl_opts = {
         "outtmpl": output_path,
@@ -31,16 +42,10 @@ async def handle_link(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         "merge_output_format": "mp4",
         "quiet": True,
         "no_warnings": True,
-        "extractor_args": {
-            "youtube": {
-                "player_client": ["ios"],
-                "player_skip": ["webpage", "config"],
-            }
-        },
-        "http_headers": {
-            "User-Agent": "com.google.ios.youtube/19.29.1 (iPhone16,2; U; CPU iOS 17_5_1 like Mac OS X;)",
-        },
     }
+
+    if cookies_file:
+        ydl_opts["cookiefile"] = cookies_file
 
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -61,6 +66,8 @@ async def handle_link(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     finally:
         if os.path.exists(output_path):
             os.remove(output_path)
+        if cookies_file and os.path.exists(cookies_file):
+            os.remove(cookies_file)
 
 
 class HealthHandler(BaseHTTPRequestHandler):
