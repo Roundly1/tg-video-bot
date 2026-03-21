@@ -15,7 +15,7 @@ CHOOSING, WAITING_LINK = range(2)
 
 keyboard = [
     ["Instagram", "TikTok"],
-    ["YouTube Shorts", "Pinterest"],
+    ["YouTube", "Pinterest"],
     ["Facebook", "Boshqalar"]
 ]
 markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
@@ -79,7 +79,7 @@ def get_ydl_opts(output_path, platform):
             "facebook": {"formats": ["dash_hd", "dash_sd", "progressive_hd", "progressive_sd"]}
         }
     elif platform == "YouTube":
-        base_opts["format"] = "worst"
+        base_opts["format"] = "18/22/17/best"
         base_opts["cookiefile"] = "/opt/render/project/src/www.youtube.com_cookies.txt"
     else:
         base_opts["format"] = "bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best[ext=mp4]/best"
