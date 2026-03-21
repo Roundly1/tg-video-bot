@@ -80,7 +80,7 @@ def get_ydl_opts(output_path, platform):
         }
     elif platform == "YouTube":
         base_opts["format"] = "worst"
-        base_opts["cookiefile"] = "www.youtube.com_cookies.txt"
+        base_opts["cookiefile"] = "/opt/render/project/src/www.youtube.com_cookies.txt"
     else:
         base_opts["format"] = "bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best[ext=mp4]/best"
 
