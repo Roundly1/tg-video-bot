@@ -43,9 +43,7 @@ async def platform_chosen(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if choice not in PLATFORMS:
         await update.message.reply_text("Iltimos, tugmalardan birini tanlang.", reply_markup=markup)
         return CHOOSING
-
     ctx.user_data["platform"] = choice
-
     await update.message.reply_text(
         f"{choice} havolasini yuboring:",
         reply_markup=ReplyKeyboardRemove()
@@ -81,9 +79,8 @@ def get_ydl_opts(output_path, platform):
             "facebook": {"formats": ["dash_hd", "dash_sd", "progressive_hd", "progressive_sd"]}
         }
     elif platform == "YouTube Shorts":
-    base_opts["format"] = "bestvideo+bestaudio/best"
-    base_opts["cookiefile"] = "www.youtube.com_cookies.txt"
-    base_opts["merge_output_format"] = "mp4"
+        base_opts["format"] = "bestvideo+bestaudio/best"
+        base_opts["cookiefile"] = "www.youtube.com_cookies.txt"
     else:
         base_opts["format"] = "bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best[ext=mp4]/best"
 
