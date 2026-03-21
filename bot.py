@@ -1,40 +1,12 @@
 import os
 import threading
-import requests
 from http.server import HTTPServer, BaseHTTPRequestHandler
+import yt_dlp
 from telegram import Update
 from telegram.ext import ApplicationBuilder, MessageHandler, CommandHandler, filters, ContextTypes
 
 BOT_TOKEN = "8395647369:AAGiAX64BeLIRM79LF9QLCWRw-VnRCsk5gE"
 MAX_SIZE_MB = 50
-
-
-def get_video_url(youtube_url):
-    api_url = "https://9xbuddy.app/process"
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36",
-        "Accept": "application/json",
-        "Content-Type": "application/json",
-        "Origin": "https://9xbuddy.app",
-        "Referer": "https://9xbuddy.app/",
-    }
-    resp = requests.get(
-        api_url,
-        params={"url": youtube_url},
-        headers=headers,
-        timeout=30
-    )
-    data = resp.json()
-
-    formats = data.get("formats", [])
-    for fmt in formats:
-        if fmt.get("ext") == "mp4" and fmt.get("url"):
-            return fmt["url"]
-
-    if formats and formats[0].get("url"):
-        return formats[0]["url"]
-
-    raise Exception("Video URL topilmadi")
 
 
 async def start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
@@ -51,14 +23,22 @@ async def handle_link(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     msg = await update.message.reply_text("⏳ Video yuklanmoqda, kuting...")
     output_path = f"video_{update.message.chat_id}.mp4"
 
+    ydl_opts = {
+        "outtmpl": output_path,
+        "format": "bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=720]+bestaudio/best[height<=720]/best/18",
+        "merge_output_format": "mp4",
+        "quiet": True,
+        "no_warnings": True,
+        "extractor_args": {
+            "youtube": {
+                "player_client": ["android_vr"]
+            }
+        },
+    }
+
     try:
-        video_url = get_video_url(url)
-        r = requests.get(video_url, stream=True, timeout=60, headers={
-            "User-Agent": "Mozilla/5.0"
-        })
-        with open(output_path, "wb") as f:
-            for chunk in r.iter_content(chunk_size=8192):
-                f.write(chunk)
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            ydl.download([url])
 
         size_mb = os.path.getsize(output_path) / (1024 * 1024)
         if size_mb > MAX_SIZE_MB:
