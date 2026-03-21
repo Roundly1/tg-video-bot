@@ -1,49 +1,129 @@
 import os
 import threading
+import tempfile
 from http.server import HTTPServer, BaseHTTPRequestHandler
 import yt_dlp
-from telegram import Update
-from telegram.ext import ApplicationBuilder, MessageHandler, CommandHandler, filters, ContextTypes
+from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove
+from telegram.ext import (
+    ApplicationBuilder, MessageHandler, CommandHandler,
+    filters, ContextTypes, ConversationHandler
+)
 
 BOT_TOKEN = "8395647369:AAGiAX64BeLIRM79LF9QLCWRw-VnRCsk5gE"
 MAX_SIZE_MB = 50
 
+CHOOSING, WAITING_LINK = range(2)
+
+keyboard = [
+    ["Instagram", "TikTok"],
+    ["YouTube Shorts", "Pinterest"],
+    ["Facebook", "Boshqalar"]
+]
+markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+
+PLATFORMS = {
+    "Instagram": "instagram.com",
+    "TikTok": "tiktok.com",
+    "YouTube Shorts": "youtube.com",
+    "Pinterest": "pinterest.com",
+    "Facebook": "facebook.com",
+    "Boshqalar": None,
+}
+
+
+def get_cookies_file():
+    cookies = os.environ.get("YOUTUBE_COOKIES", "")
+    if not cookies:
+        return None
+    tmp = tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False)
+    tmp.write(cookies)
+    tmp.flush()
+    tmp.close()
+    return tmp.name
+
 
 async def start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Salom! YouTube havolasini yuboring, video yuklab beraman.")
+    await update.message.reply_text(
+        "Salom! Qaysi platformadan video yuklashni xohlaysiz?",
+        reply_markup=markup
+    )
+    return CHOOSING
 
 
-async def handle_link(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    url = update.message.text.strip()
+async def platform_chosen(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    choice = update.message.text
+    if choice not in PLATFORMS:
+        await update.message.reply_text("Iltimos, tugmalardan birini tanlang.", reply_markup=markup)
+        return CHOOSING
+    ctx.user_data["platform"] = choice
+    await update.message.reply_text(
+        f"{choice} havolasini yuboring:",
+        reply_markup=ReplyKeyboardRemove()
+    )
+    return WAITING_LINK
 
-    if "youtube.com" not in url and "youtu.be" not in url:
-        await update.message.reply_text("Iltimos, YouTube havolasini yuboring.")
-        return
 
-    msg = await update.message.reply_text("⏳ Video yuklanmoqda, kuting...")
-    output_path = f"video_{update.message.chat_id}.mp4"
-
-    ydl_opts = {
+def get_ydl_opts(output_path, platform):
+    base_opts = {
         "outtmpl": output_path,
-        "format": "bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=720]+bestaudio/best[height<=720]/best/18",
         "merge_output_format": "mp4",
         "quiet": True,
         "no_warnings": True,
-        "extractor_args": {
-            "youtube": {
-                "player_client": ["android_vr"]
-            }
+        "http_headers": {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36",
         },
     }
 
+    if platform == "YouTube Shorts":
+        base_opts["format"] = "bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=720]+bestaudio/best[height<=720]/best"
+        base_opts["extractor_args"] = {
+            "youtube": {"player_client": ["android_vr"]}
+        }
+        cookies_file = get_cookies_file()
+        if cookies_file:
+            base_opts["cookiefile"] = cookies_file
+    elif platform == "Pinterest":
+        base_opts["format"] = "bestvideo+bestaudio/best/mp4"
+        base_opts["postprocessors"] = [{
+            "key": "FFmpegVideoConvertor",
+            "preferedformat": "mp4",
+        }]
+    elif platform == "Instagram":
+        base_opts["format"] = "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best"
+        base_opts["extractor_args"] = {
+            "instagram": {"include_dash_manifest": ["0"]}
+        }
+    elif platform == "Facebook":
+        base_opts["format"] = "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best"
+    else:
+        base_opts["format"] = "bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best[ext=mp4]/best"
+
+    return base_opts
+
+
+async def receive_link(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    url = update.message.text.strip()
+    platform = ctx.user_data.get("platform", "Boshqalar")
+
+    if not url.startswith("http"):
+        await update.message.reply_text("Iltimos, to'g'ri havola yuboring.")
+        return WAITING_LINK
+
+    msg = await update.message.reply_text("⏳ Video yuklanmoqda, kuting...")
+    output_path = f"video_{update.message.chat_id}.mp4"
+    cookies_file = None
+
     try:
+        ydl_opts = get_ydl_opts(output_path, platform)
+        cookies_file = ydl_opts.get("cookiefile")
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             ydl.download([url])
 
         size_mb = os.path.getsize(output_path) / (1024 * 1024)
         if size_mb > MAX_SIZE_MB:
             await msg.edit_text(f"❌ Video juda katta ({size_mb:.1f} MB). Maksimum {MAX_SIZE_MB} MB.")
-            return
+            await update.message.reply_text("Platformani tanlang:", reply_markup=markup)
+            return CHOOSING
 
         await msg.edit_text("📤 Yuborilmoqda...")
         with open(output_path, "rb") as f:
@@ -55,6 +135,11 @@ async def handle_link(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     finally:
         if os.path.exists(output_path):
             os.remove(output_path)
+        if cookies_file and os.path.exists(cookies_file):
+            os.remove(cookies_file)
+
+    await update.message.reply_text("Yana video yuklash uchun platformani tanlang:", reply_markup=markup)
+    return CHOOSING
 
 
 class HealthHandler(BaseHTTPRequestHandler):
@@ -76,8 +161,17 @@ def run_health_server():
 def main():
     threading.Thread(target=run_health_server, daemon=True).start()
     app = ApplicationBuilder().token(BOT_TOKEN).build()
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_link))
+
+    conv_handler = ConversationHandler(
+        entry_points=[CommandHandler("start", start)],
+        states={
+            CHOOSING: [MessageHandler(filters.TEXT & ~filters.COMMAND, platform_chosen)],
+            WAITING_LINK: [MessageHandler(filters.TEXT & ~filters.COMMAND, receive_link)],
+        },
+        fallbacks=[CommandHandler("start", start)],
+    )
+
+    app.add_handler(conv_handler)
     print("Bot ishga tushdi...")
     app.run_polling()
 
