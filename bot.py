@@ -30,7 +30,7 @@ PLATFORMS = {
     "Boshqalar": None,
 }
 
-COBALT_API = "https://api.cobalt.tools/api/json"
+COBALT_API = "https://cobalt.tools/api/json"
 COBALT_HEADERS = {
     "Accept": "application/json",
     "Content-Type": "application/json",
