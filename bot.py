@@ -1,18 +1,12 @@
 import os
 import threading
-import requests
 from http.server import HTTPServer, BaseHTTPRequestHandler
+import yt_dlp
 from telegram import Update
 from telegram.ext import ApplicationBuilder, MessageHandler, CommandHandler, filters, ContextTypes
 
 BOT_TOKEN = "8395647369:AAGiAX64BeLIRM79LF9QLCWRw-VnRCsk5gE"
 MAX_SIZE_MB = 50
-
-COBALT_API = "https://api.cobalt.tools/"
-COBALT_HEADERS = {
-    "Accept": "application/json",
-    "Content-Type": "application/json",
-}
 
 
 async def start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
@@ -31,27 +25,26 @@ async def handle_link(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     msg = await update.message.reply_text("⏳ Video yuklanmoqda, kuting...")
     output_path = f"video_{update.message.chat_id}.mp4"
 
+    ydl_opts = {
+        "outtmpl": output_path,
+        "format": "bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=720]+bestaudio/best[height<=720]/best",
+        "merge_output_format": "mp4",
+        "quiet": True,
+        "no_warnings": True,
+        "extractor_args": {
+            "youtube": {
+                "player_client": ["ios"],
+                "player_skip": ["webpage", "config"],
+            }
+        },
+        "http_headers": {
+            "User-Agent": "com.google.ios.youtube/19.29.1 (iPhone16,2; U; CPU iOS 17_5_1 like Mac OS X;)",
+        },
+    }
+
     try:
-        resp = requests.post(
-            COBALT_API,
-            headers=COBALT_HEADERS,
-            json={"url": url, "videoQuality": "720", "filenameStyle": "basic"},
-            timeout=30
-        )
-        data = resp.json()
-        status = data.get("status")
-
-        if status in ("stream", "redirect", "tunnel"):
-            video_url = data.get("url")
-        elif status == "picker":
-            video_url = data["picker"][0]["url"]
-        else:
-            raise Exception(f"Xatolik: {data.get('error', {}).get('code', str(data))}")
-
-        r = requests.get(video_url, stream=True, timeout=60)
-        with open(output_path, "wb") as f:
-            for chunk in r.iter_content(chunk_size=8192):
-                f.write(chunk)
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            ydl.download([url])
 
         size_mb = os.path.getsize(output_path) / (1024 * 1024)
         if size_mb > MAX_SIZE_MB:
