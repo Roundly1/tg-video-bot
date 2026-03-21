@@ -1,8 +1,8 @@
 import os
 import threading
-import tempfile
 from http.server import HTTPServer, BaseHTTPRequestHandler
 import yt_dlp
+from pytubefix import YouTube
 from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove
 from telegram.ext import (
     ApplicationBuilder, MessageHandler, CommandHandler,
@@ -16,7 +16,7 @@ CHOOSING, WAITING_LINK = range(2)
 
 keyboard = [
     ["Instagram", "TikTok"],
-    ["YouTube", "Pinterest"],
+    ["YouTube Shorts", "Pinterest"],
     ["Facebook", "Boshqalar"]
 ]
 markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
@@ -24,7 +24,7 @@ markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 PLATFORMS = {
     "Instagram": "instagram.com",
     "TikTok": "tiktok.com",
-    "YouTube": "youtube.com",
+    "YouTube Shorts": "youtube.com",
     "Pinterest": "pinterest.com",
     "Facebook": "facebook.com",
     "Boshqalar": None,
@@ -52,14 +52,14 @@ async def platform_chosen(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     return WAITING_LINK
 
 
-def get_cookies_file():
-    cookies_content = os.environ.get("YOUTUBE_COOKIES")
-    if not cookies_content:
-        return None
-    tmp = tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False)
-    tmp.write(cookies_content)
-    tmp.close()
-    return tmp.name
+def download_youtube_shorts(url, output_path):
+    yt = YouTube(url, use_oauth=False, allow_oauth_cache=False)
+    stream = yt.streams.filter(progressive=True, file_extension="mp4").order_by("resolution").last()
+    if not stream:
+        stream = yt.streams.filter(file_extension="mp4").order_by("resolution").last()
+    if not stream:
+        stream = yt.streams.first()
+    stream.download(filename=output_path)
 
 
 def get_ydl_opts(output_path, platform):
@@ -86,17 +86,6 @@ def get_ydl_opts(output_path, platform):
         }
     elif platform == "Facebook":
         base_opts["format"] = "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best"
-        base_opts["extractor_args"] = {
-            "facebook": {"formats": ["dash_hd", "dash_sd", "progressive_hd", "progressive_sd"]}
-        }
-    elif platform == "YouTube":
-        base_opts["format"] = "bestvideo*+bestaudio*/best"
-        base_opts["extractor_args"] = {
-            "youtube": {"player_client": ["android"]}
-        }
-        cookies_file = get_cookies_file()
-        if cookies_file:
-            base_opts["cookiefile"] = cookies_file
     else:
         base_opts["format"] = "bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best[ext=mp4]/best"
 
@@ -115,9 +104,12 @@ async def receive_link(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     output_path = f"video_{update.message.chat_id}.mp4"
 
     try:
-        ydl_opts = get_ydl_opts(output_path, platform)
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            ydl.download([url])
+        if platform == "YouTube Shorts":
+            download_youtube_shorts(url, output_path)
+        else:
+            ydl_opts = get_ydl_opts(output_path, platform)
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                ydl.download([url])
 
         size_mb = os.path.getsize(output_path) / (1024 * 1024)
         if size_mb > MAX_SIZE_MB:
@@ -131,8 +123,6 @@ async def receive_link(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_video(video=video_file, supports_streaming=True)
         await msg.delete()
 
-    except yt_dlp.utils.DownloadError as e:
-        await msg.edit_text(f"❌ Yuklab bo'lmadi.\n{str(e)[:200]}")
     except Exception as e:
         await msg.edit_text(f"❌ Xatolik: {str(e)[:200]}")
     finally:
