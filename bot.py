@@ -59,12 +59,12 @@ async def platform_chosen(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 
 def download_via_cobalt(url, output_path):
-    resp = requests.post(
-        COBALT_API,
-        headers=COBALT_HEADERS,
-        json={"url": url, "vQuality": "720", "filenamePattern": "basic"},
-        timeout=30
-    )
+resp = requests.post(
+    COBALT_API,
+    headers=COBALT_HEADERS,
+    json={"url": url, "videoQuality": "720", "filenameStyle": "basic"},
+    timeout=30
+)
     data = resp.json()
     status = data.get("status")
 
