@@ -30,7 +30,7 @@ PLATFORMS = {
     "Boshqalar": None,
 }
 
-COBALT_API = "https://cobalt.tools/api/json"
+COBALT_API = "https://api.cobalt.tools/"
 COBALT_HEADERS = {
     "Accept": "application/json",
     "Content-Type": "application/json",
@@ -59,31 +59,29 @@ async def platform_chosen(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 
 def download_via_cobalt(url, output_path):
-resp = requests.post(
-    COBALT_API,
-    headers=COBALT_HEADERS,
-    json={"url": url, "videoQuality": "720", "filenameStyle": "basic"},
-    timeout=30
-)
+    resp = requests.post(
+        COBALT_API,
+        headers=COBALT_HEADERS,
+        json={"url": url, "videoQuality": "720", "filenameStyle": "basic"},
+        timeout=30
+    )
     data = resp.json()
     status = data.get("status")
 
-    if status == "stream" or status == "redirect":
+    if status in ("stream", "redirect", "tunnel"):
         video_url = data.get("url")
         r = requests.get(video_url, stream=True, timeout=60)
         with open(output_path, "wb") as f:
             for chunk in r.iter_content(chunk_size=8192):
                 f.write(chunk)
-        return True
     elif status == "picker":
         video_url = data["picker"][0]["url"]
         r = requests.get(video_url, stream=True, timeout=60)
         with open(output_path, "wb") as f:
             for chunk in r.iter_content(chunk_size=8192):
                 f.write(chunk)
-        return True
     else:
-        raise Exception(f"Cobalt xatolik: {data.get('text', str(data))}")
+        raise Exception(f"Cobalt xatolik: {data.get('error', {}).get('code', str(data))}")
 
 
 def get_ydl_opts(output_path, platform):
