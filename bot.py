@@ -1,5 +1,6 @@
 import os
 import threading
+import tempfile
 from http.server import HTTPServer, BaseHTTPRequestHandler
 import yt_dlp
 from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove
@@ -51,6 +52,16 @@ async def platform_chosen(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     return WAITING_LINK
 
 
+def get_cookies_file():
+    cookies_content = os.environ.get("YOUTUBE_COOKIES")
+    if not cookies_content:
+        return None
+    tmp = tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False)
+    tmp.write(cookies_content)
+    tmp.close()
+    return tmp.name
+
+
 def get_ydl_opts(output_path, platform):
     base_opts = {
         "outtmpl": output_path,
@@ -79,8 +90,13 @@ def get_ydl_opts(output_path, platform):
             "facebook": {"formats": ["dash_hd", "dash_sd", "progressive_hd", "progressive_sd"]}
         }
     elif platform == "YouTube":
-        base_opts["format"] = "18/22/17/best"
-        base_opts["cookiefile"] = "/opt/render/project/src/www.youtube.com_cookies.txt"
+        base_opts["format"] = "bestvideo*+bestaudio*/best"
+        base_opts["extractor_args"] = {
+            "youtube": {"player_client": ["android"]}
+        }
+        cookies_file = get_cookies_file()
+        if cookies_file:
+            base_opts["cookiefile"] = cookies_file
     else:
         base_opts["format"] = "bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best[ext=mp4]/best"
 
