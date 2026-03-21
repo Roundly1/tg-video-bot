@@ -81,8 +81,9 @@ def get_ydl_opts(output_path, platform):
             "facebook": {"formats": ["dash_hd", "dash_sd", "progressive_hd", "progressive_sd"]}
         }
     elif platform == "YouTube Shorts":
-        base_opts["format"] = "bestvideo[ext=mp4][height<=720]+bestaudio[ext=m4a]/best[ext=mp4][height<=720]/best"
-        base_opts["cookiefile"] = "www.youtube.com_cookies.txt"
+    base_opts["format"] = "bestvideo+bestaudio/best"
+    base_opts["cookiefile"] = "www.youtube.com_cookies.txt"
+    base_opts["merge_output_format"] = "mp4"
     else:
         base_opts["format"] = "bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best[ext=mp4]/best"
 
