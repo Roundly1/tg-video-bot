@@ -1,8 +1,8 @@
 import os
+import re
 import threading
-import tempfile
+import requests
 from http.server import HTTPServer, BaseHTTPRequestHandler
-import yt_dlp
 from telegram import Update
 from telegram.ext import ApplicationBuilder, MessageHandler, CommandHandler, filters, ContextTypes
 
@@ -10,15 +10,19 @@ BOT_TOKEN = "8395647369:AAGiAX64BeLIRM79LF9QLCWRw-VnRCsk5gE"
 MAX_SIZE_MB = 50
 
 
-def get_cookies_file():
-    cookies = os.environ.get("YOUTUBE_COOKIES", "")
-    if not cookies:
-        return None
-    tmp = tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False)
-    tmp.write(cookies)
-    tmp.flush()
-    tmp.close()
-    return tmp.name
+def get_video_url(youtube_url):
+    ss_url = youtube_url.replace("youtube.com", "ssyoutube.com").replace("youtu.be", "ssyoutube.com")
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36"
+    }
+    resp = requests.get(ss_url, headers=headers, timeout=15)
+    # Video URL ni sahifadan topamiz
+    matches = re.findall(r'href=["\']([^"\']+\.mp4[^"\']*)["\']', resp.text)
+    if not matches:
+        matches = re.findall(r'"url":"(https://[^"]+\.mp4[^"]*)"', resp.text)
+    if not matches:
+        raise Exception("Video URL topilmadi")
+    return matches[0].replace("\\u0026", "&")
 
 
 async def start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
@@ -34,22 +38,15 @@ async def handle_link(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
     msg = await update.message.reply_text("⏳ Video yuklanmoqda, kuting...")
     output_path = f"video_{update.message.chat_id}.mp4"
-    cookies_file = get_cookies_file()
-
-    ydl_opts = {
-        "outtmpl": output_path,
-        "format": "bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=720]+bestaudio/best[height<=720]/best",
-        "merge_output_format": "mp4",
-        "quiet": True,
-        "no_warnings": True,
-    }
-
-    if cookies_file:
-        ydl_opts["cookiefile"] = cookies_file
 
     try:
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            ydl.download([url])
+        video_url = get_video_url(url)
+        r = requests.get(video_url, stream=True, timeout=60, headers={
+            "User-Agent": "Mozilla/5.0"
+        })
+        with open(output_path, "wb") as f:
+            for chunk in r.iter_content(chunk_size=8192):
+                f.write(chunk)
 
         size_mb = os.path.getsize(output_path) / (1024 * 1024)
         if size_mb > MAX_SIZE_MB:
@@ -66,8 +63,6 @@ async def handle_link(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     finally:
         if os.path.exists(output_path):
             os.remove(output_path)
-        if cookies_file and os.path.exists(cookies_file):
-            os.remove(cookies_file)
 
 
 class HealthHandler(BaseHTTPRequestHandler):
