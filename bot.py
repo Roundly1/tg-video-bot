@@ -75,7 +75,7 @@ def get_ydl_opts(output_path, platform):
     }
 
     if platform == "YouTube Shorts":
-        base_opts["format"] = "18/22/bestvideo+bestaudio/best"
+        base_opts["format"] = "18"
         base_opts["extractor_args"] = {
             "youtube": {"player_client": ["android_vr"]}
         }
