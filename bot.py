@@ -1,8 +1,8 @@
 import os
 import threading
+import requests
 from http.server import HTTPServer, BaseHTTPRequestHandler
 import yt_dlp
-from pytubefix import YouTube
 from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove
 from telegram.ext import (
     ApplicationBuilder, MessageHandler, CommandHandler,
@@ -30,6 +30,12 @@ PLATFORMS = {
     "Boshqalar": None,
 }
 
+COBALT_API = "https://api.cobalt.tools/api/json"
+COBALT_HEADERS = {
+    "Accept": "application/json",
+    "Content-Type": "application/json",
+}
+
 
 async def start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
@@ -52,14 +58,32 @@ async def platform_chosen(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     return WAITING_LINK
 
 
-def download_youtube_shorts(url, output_path):
-    yt = YouTube(url, use_oauth=False, allow_oauth_cache=False)
-    stream = yt.streams.filter(progressive=True, file_extension="mp4").order_by("resolution").last()
-    if not stream:
-        stream = yt.streams.filter(file_extension="mp4").order_by("resolution").last()
-    if not stream:
-        stream = yt.streams.first()
-    stream.download(filename=output_path)
+def download_via_cobalt(url, output_path):
+    resp = requests.post(
+        COBALT_API,
+        headers=COBALT_HEADERS,
+        json={"url": url, "vQuality": "720", "filenamePattern": "basic"},
+        timeout=30
+    )
+    data = resp.json()
+    status = data.get("status")
+
+    if status == "stream" or status == "redirect":
+        video_url = data.get("url")
+        r = requests.get(video_url, stream=True, timeout=60)
+        with open(output_path, "wb") as f:
+            for chunk in r.iter_content(chunk_size=8192):
+                f.write(chunk)
+        return True
+    elif status == "picker":
+        video_url = data["picker"][0]["url"]
+        r = requests.get(video_url, stream=True, timeout=60)
+        with open(output_path, "wb") as f:
+            for chunk in r.iter_content(chunk_size=8192):
+                f.write(chunk)
+        return True
+    else:
+        raise Exception(f"Cobalt xatolik: {data.get('text', str(data))}")
 
 
 def get_ydl_opts(output_path, platform):
@@ -105,7 +129,7 @@ async def receive_link(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
     try:
         if platform == "YouTube Shorts":
-            download_youtube_shorts(url, output_path)
+            download_via_cobalt(url, output_path)
         else:
             ydl_opts = get_ydl_opts(output_path, platform)
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
