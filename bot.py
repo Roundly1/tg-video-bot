@@ -23,7 +23,7 @@ markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 PLATFORMS = {
     "Instagram": "instagram.com",
     "TikTok": "tiktok.com",
-    "YouTube Shorts": "youtube.com",
+    "YouTube": "youtube.com",
     "Pinterest": "pinterest.com",
     "Facebook": "facebook.com",
     "Boshqalar": None,
@@ -78,8 +78,8 @@ def get_ydl_opts(output_path, platform):
         base_opts["extractor_args"] = {
             "facebook": {"formats": ["dash_hd", "dash_sd", "progressive_hd", "progressive_sd"]}
         }
-    elif platform == "YouTube Shorts":
-        base_opts["format"] = "bestvideo+bestaudio/best"
+    elif platform == "YouTube":
+        base_opts["format"] = "worst"
         base_opts["cookiefile"] = "www.youtube.com_cookies.txt"
     else:
         base_opts["format"] = "bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best[ext=mp4]/best"
